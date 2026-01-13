@@ -1,4 +1,4 @@
-obj-m += uart_driver.o
+obj-m += uart.o
 uart_driver-objs := uart.o
 
 all:
