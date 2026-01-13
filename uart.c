@@ -152,28 +152,75 @@ static char uart_receive_char(void)
 }
 
 // Proc file read handler for receiving data
+// static ssize_t uart_proc_read(struct file *file, char __user *buf, 
+//                               size_t count, loff_t *ppos)
+// {
+//     char kbuf[256];
+//     int i = 0;
+//     char c;
+    
+//     // Read available characters (up to buffer size)
+//     while (i < (sizeof(kbuf) - 1) && i < count && uart_data_available()) {
+//         c = uart_receive_char();
+//         if (c != 0) {
+//             kbuf[i++] = c;
+//         }
+//     }
+    
+//     if (i == 0) {
+//         return 0;  // No data available
+//     }
+    
+//     kbuf[i] = '\0';
+    
+//     // Copy to user space
+//     if (copy_to_user(buf, kbuf, i)) {
+//         return -EFAULT;
+//     }
+    
+//     pr_info("UART RX: received %d bytes\n", i);
+//     return i;
+// }
+
 static ssize_t uart_proc_read(struct file *file, char __user *buf, 
                               size_t count, loff_t *ppos)
 {
     char kbuf[256];
     int i = 0;
     char c;
+    int timeout = 1000; // Wait up to 1000 iterations for data
     
-    // Read available characters (up to buffer size)
-    while (i < (sizeof(kbuf) - 1) && i < count && uart_data_available()) {
-        c = uart_receive_char();
-        if (c != 0) {
-            kbuf[i++] = c;
+    // Wait for first character
+    while (!uart_data_available() && timeout-- > 0) {
+        msleep(1); // Wait 1ms
+    }
+    
+    if (timeout <= 0) {
+        return 0; // No data received
+    }
+    
+    // Read all available characters with small delays
+    while (i < (sizeof(kbuf) - 1) && i < count) {
+        if (uart_data_available()) {
+            c = uart_receive_char();
+            if (c != 0) {
+                kbuf[i++] = c;
+            }
+        } else {
+            // Wait a bit for more characters
+            msleep(10);
+            if (!uart_data_available()) {
+                break; // No more data coming
+            }
         }
     }
     
     if (i == 0) {
-        return 0;  // No data available
+        return 0;
     }
     
     kbuf[i] = '\0';
     
-    // Copy to user space
     if (copy_to_user(buf, kbuf, i)) {
         return -EFAULT;
     }
@@ -181,6 +228,7 @@ static ssize_t uart_proc_read(struct file *file, char __user *buf,
     pr_info("UART RX: received %d bytes\n", i);
     return i;
 }
+
 
 
 // Proc file write handler 
